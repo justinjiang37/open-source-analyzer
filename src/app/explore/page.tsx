@@ -4,15 +4,32 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Search } from "lucide-react";
 import { ProjectCard } from "@/components/project-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Project } from "@/lib/mock-data";
+import { Project, AlivenessMetrics, ContributionOutcomesMetrics } from "@/lib/mock-data";
 
-// Prefetch insights for a project (fire-and-forget, warms cache)
-function prefetchInsights(owner: string, repo: string) {
-  fetch(`/api/projects/${owner}/${repo}/insights`, {
-    priority: "low",
-  } as RequestInit).catch(() => {
+export interface PrefetchedInsights {
+  aliveness: AlivenessMetrics;
+  contributionOutcomes: ContributionOutcomesMetrics;
+}
+
+// Prefetch insights only (summary is user-triggered)
+async function prefetchInsights(
+  project: Project,
+  onComplete: (key: string, data: PrefetchedInsights) => void
+) {
+  try {
+    const insightsRes = await fetch(`/api/projects/${project.owner}/${project.name}/insights`, {
+      priority: "low",
+    } as RequestInit);
+    if (!insightsRes.ok) return;
+    const insights = await insightsRes.json();
+
+    onComplete(`${project.owner}/${project.name}`, {
+      aliveness: insights.aliveness,
+      contributionOutcomes: insights.contributionOutcomes,
+    });
+  } catch {
     // Silently ignore prefetch errors
-  });
+  }
 }
 
 export default function ExplorePage() {
@@ -20,6 +37,7 @@ export default function ExplorePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [prefetchedData, setPrefetchedData] = useState<Record<string, PrefetchedInsights>>({});
   const prefetchedRef = useRef<Set<string>>(new Set());
 
   const fetchProjects = useCallback(async (search: string) => {
@@ -48,7 +66,12 @@ export default function ExplorePage() {
     return () => clearTimeout(timer);
   }, [searchQuery, fetchProjects]);
 
-  // Prefetch insights for visible projects after they load
+  // Callback to store prefetched data
+  const handlePrefetchComplete = useCallback((key: string, data: PrefetchedInsights) => {
+    setPrefetchedData((prev) => ({ ...prev, [key]: data }));
+  }, []);
+
+  // Prefetch insights + summary for visible projects after they load
   useEffect(() => {
     if (loading || projects.length === 0) return;
 
@@ -61,12 +84,12 @@ export default function ExplorePage() {
     });
 
     prefetchQueue.forEach((project, index) => {
-      // Stagger requests by 200ms each to avoid rate limiting
+      // Stagger requests by 200ms each
       setTimeout(() => {
-        prefetchInsights(project.owner, project.name);
+        prefetchInsights(project, handlePrefetchComplete);
       }, index * 200);
     });
-  }, [projects, loading]);
+  }, [projects, loading, handlePrefetchComplete]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -109,7 +132,11 @@ export default function ExplorePage() {
                 <Skeleton key={i} className="h-16 rounded-xl" />
               ))
             : projects.map((project) => (
-                <ProjectCard key={project.id} project={project} />
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  prefetchedData={prefetchedData[`${project.owner}/${project.name}`]}
+                />
               ))}
         </div>
 

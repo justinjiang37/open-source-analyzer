@@ -1,14 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { Star, GitCommit, ChevronDown, Clock, Activity, Users, Tag, GitPullRequest, CheckCircle2, MessageSquare, Timer, UserPlus, XCircle } from "lucide-react";
+import { Star, GitCommit, ChevronDown, Clock, Activity, Users, Tag, GitPullRequest, CheckCircle2, MessageSquare, Timer, UserPlus, XCircle, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Project, AlivenessMetrics, ContributionOutcomesMetrics } from "@/lib/mock-data";
 import Image from "next/image";
 
+interface PrefetchedInsights {
+  aliveness: AlivenessMetrics;
+  contributionOutcomes: ContributionOutcomesMetrics;
+}
+
 interface ProjectCardProps {
   project: Project;
+  prefetchedData?: PrefetchedInsights;
 }
 
 function formatStars(stars: number): string {
@@ -90,15 +96,28 @@ function formatHoursToReadable(hours: number): string {
   return `${days}d`;
 }
 
-export function ProjectCard({ project }: ProjectCardProps) {
+export function ProjectCard({ project, prefetchedData }: ProjectCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [aliveness, setAliveness] = useState<AlivenessMetrics | null>(null);
   const [contributionOutcomes, setContributionOutcomes] = useState<ContributionOutcomesMetrics | null>(null);
+  const [summary, setSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Use prefetched data if available
+  const displayAliveness = aliveness || prefetchedData?.aliveness || null;
+  const displayContributionOutcomes = contributionOutcomes || prefetchedData?.contributionOutcomes || null;
+  const hasPrefetchedData = !!prefetchedData;
 
   const handleToggle = async (e: React.MouseEvent) => {
     e.preventDefault();
+
+    // If we have prefetched data, just expand without fetching
+    if (hasPrefetchedData) {
+      setExpanded(!expanded);
+      return;
+    }
 
     if (!expanded && !aliveness && !loading) {
       setLoading(true);
@@ -120,6 +139,39 @@ export function ProjectCard({ project }: ProjectCardProps) {
     }
 
     setExpanded(!expanded);
+  };
+
+  const handleGenerateSummary = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (summaryLoading || summary) return;
+
+    const currentAliveness = displayAliveness;
+    const currentContributionOutcomes = displayContributionOutcomes;
+
+    if (!currentAliveness || !currentContributionOutcomes) return;
+
+    setSummaryLoading(true);
+    try {
+      const summaryRes = await fetch(`/api/projects/${project.owner}/${project.name}/summary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          aliveness: currentAliveness,
+          contributionOutcomes: currentContributionOutcomes,
+          projectName: project.name,
+          projectDescription: project.description,
+        }),
+      });
+      if (summaryRes.ok) {
+        const summaryData = await summaryRes.json();
+        setSummary(summaryData.summary);
+      }
+    } catch (err) {
+      console.error("Failed to fetch summary:", err);
+    } finally {
+      setSummaryLoading(false);
+    }
   };
 
   return (
@@ -224,7 +276,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
             </div>
           )}
 
-          {aliveness && !loading && (
+          {displayAliveness && !loading && (
             <div className="space-y-4">
               {/* Stats Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -234,8 +286,8 @@ export function ProjectCard({ project }: ProjectCardProps) {
                     <Clock className="size-3.5" />
                     Commit Recency
                   </div>
-                  <div className={`font-mono text-2xl font-bold ${getRecencyColor(aliveness.daysSinceLastCommit)}`}>
-                    {aliveness.daysSinceLastCommit}d
+                  <div className={`font-mono text-2xl font-bold ${getRecencyColor(displayAliveness.daysSinceLastCommit)}`}>
+                    {displayAliveness.daysSinceLastCommit}d
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     since last commit
@@ -249,13 +301,13 @@ export function ProjectCard({ project }: ProjectCardProps) {
                     Commit Velocity
                   </div>
                   <div className="font-mono text-2xl font-bold text-blue-700 dark:text-blue-300">
-                    {aliveness.commitVelocity.month}
+                    {displayAliveness.commitVelocity.month}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     commits/month
                   </div>
                   <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                    {aliveness.commitVelocity.week}/wk · {aliveness.commitVelocity.quarter}/90d
+                    {displayAliveness.commitVelocity.week}/wk · {displayAliveness.commitVelocity.quarter}/90d
                   </div>
                 </div>
 
@@ -265,14 +317,14 @@ export function ProjectCard({ project }: ProjectCardProps) {
                     <Users className="size-3.5" />
                     Bus Factor
                   </div>
-                  <div className={`font-mono text-2xl font-bold ${getBusFactorColor(aliveness.busFactor.top1Percent)}`}>
-                    {aliveness.busFactor.top1Percent}%
+                  <div className={`font-mono text-2xl font-bold ${getBusFactorColor(displayAliveness.busFactor.top1Percent)}`}>
+                    {displayAliveness.busFactor.top1Percent}%
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     top contributor
                   </div>
                   <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                    top 3: {aliveness.busFactor.top3Percent}%
+                    top 3: {displayAliveness.busFactor.top3Percent}%
                   </div>
                 </div>
 
@@ -283,10 +335,10 @@ export function ProjectCard({ project }: ProjectCardProps) {
                     Release Cadence
                   </div>
                   <div className="font-mono text-2xl font-bold text-blue-700 dark:text-blue-300">
-                    {aliveness.releaseCadence !== null ? `${aliveness.releaseCadence}d` : "—"}
+                    {displayAliveness.releaseCadence !== null ? `${displayAliveness.releaseCadence}d` : "—"}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {aliveness.releaseCadence !== null ? "avg between releases" : "no releases"}
+                    {displayAliveness.releaseCadence !== null ? "avg between releases" : "no releases"}
                   </div>
                 </div>
               </div>
@@ -302,11 +354,11 @@ export function ProjectCard({ project }: ProjectCardProps) {
                     <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Last 30 days</div>
                     <div className="flex items-center gap-3">
                       <span className="text-green-600 dark:text-green-400 font-mono text-lg">
-                        +{aliveness.issueChurn.opened30}
+                        +{displayAliveness.issueChurn.opened30}
                       </span>
                       <span className="text-gray-400">/</span>
                       <span className="text-red-600 dark:text-red-400 font-mono text-lg">
-                        -{aliveness.issueChurn.closed30}
+                        -{displayAliveness.issueChurn.closed30}
                       </span>
                       <span className="text-xs text-gray-500 dark:text-gray-400">
                         opened / closed
@@ -317,11 +369,11 @@ export function ProjectCard({ project }: ProjectCardProps) {
                     <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Last 90 days</div>
                     <div className="flex items-center gap-3">
                       <span className="text-green-600 dark:text-green-400 font-mono text-lg">
-                        +{aliveness.issueChurn.opened90}
+                        +{displayAliveness.issueChurn.opened90}
                       </span>
                       <span className="text-gray-400">/</span>
                       <span className="text-red-600 dark:text-red-400 font-mono text-lg">
-                        -{aliveness.issueChurn.closed90}
+                        -{displayAliveness.issueChurn.closed90}
                       </span>
                       <span className="text-xs text-gray-500 dark:text-gray-400">
                         opened / closed
@@ -351,7 +403,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
               </div>
             )}
 
-            {contributionOutcomes && !loading && (
+            {displayContributionOutcomes && !loading && (
               <div className="space-y-4">
                 {/* Stats Grid */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -361,8 +413,8 @@ export function ProjectCard({ project }: ProjectCardProps) {
                       <CheckCircle2 className="size-3.5" />
                       PR Acceptance
                     </div>
-                    <div className={`font-mono text-2xl font-bold ${getAcceptanceRateColor(contributionOutcomes.prAcceptanceRate)}`}>
-                      {contributionOutcomes.prAcceptanceRate}%
+                    <div className={`font-mono text-2xl font-bold ${getAcceptanceRateColor(displayContributionOutcomes.prAcceptanceRate)}`}>
+                      {displayContributionOutcomes.prAcceptanceRate}%
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       PRs merged
@@ -375,8 +427,8 @@ export function ProjectCard({ project }: ProjectCardProps) {
                       <MessageSquare className="size-3.5" />
                       First Response
                     </div>
-                    <div className={`font-mono text-2xl font-bold ${contributionOutcomes.timeToFirstResponse !== null ? getResponseTimeColor(contributionOutcomes.timeToFirstResponse) : "text-gray-400"}`}>
-                      {contributionOutcomes.timeToFirstResponse !== null ? formatHoursToReadable(contributionOutcomes.timeToFirstResponse) : "—"}
+                    <div className={`font-mono text-2xl font-bold ${displayContributionOutcomes.timeToFirstResponse !== null ? getResponseTimeColor(displayContributionOutcomes.timeToFirstResponse) : "text-gray-400"}`}>
+                      {displayContributionOutcomes.timeToFirstResponse !== null ? formatHoursToReadable(displayContributionOutcomes.timeToFirstResponse) : "—"}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       avg wait time
@@ -389,8 +441,8 @@ export function ProjectCard({ project }: ProjectCardProps) {
                       <Timer className="size-3.5" />
                       Time to Merge
                     </div>
-                    <div className={`font-mono text-2xl font-bold ${contributionOutcomes.timeToMerge !== null ? getMergeTimeColor(contributionOutcomes.timeToMerge) : "text-gray-400"}`}>
-                      {contributionOutcomes.timeToMerge !== null ? formatHoursToReadable(contributionOutcomes.timeToMerge) : "—"}
+                    <div className={`font-mono text-2xl font-bold ${displayContributionOutcomes.timeToMerge !== null ? getMergeTimeColor(displayContributionOutcomes.timeToMerge) : "text-gray-400"}`}>
+                      {displayContributionOutcomes.timeToMerge !== null ? formatHoursToReadable(displayContributionOutcomes.timeToMerge) : "—"}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       avg to land
@@ -403,8 +455,8 @@ export function ProjectCard({ project }: ProjectCardProps) {
                       <UserPlus className="size-3.5" />
                       External PRs
                     </div>
-                    <div className={`font-mono text-2xl font-bold ${getExternalShareColor(contributionOutcomes.externalContributorShare)}`}>
-                      {contributionOutcomes.externalContributorShare}%
+                    <div className={`font-mono text-2xl font-bold ${getExternalShareColor(displayContributionOutcomes.externalContributorShare)}`}>
+                      {displayContributionOutcomes.externalContributorShare}%
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       from outside
@@ -417,8 +469,8 @@ export function ProjectCard({ project }: ProjectCardProps) {
                       <XCircle className="size-3.5" />
                       Rejected
                     </div>
-                    <div className={`font-mono text-2xl font-bold ${getClosedWithoutMergeColor(contributionOutcomes.closedWithoutMergeRate)}`}>
-                      {contributionOutcomes.closedWithoutMergeRate}%
+                    <div className={`font-mono text-2xl font-bold ${getClosedWithoutMergeColor(displayContributionOutcomes.closedWithoutMergeRate)}`}>
+                      {displayContributionOutcomes.closedWithoutMergeRate}%
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       closed w/o merge
@@ -437,7 +489,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
                       <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Merged</div>
                       <div className="flex items-center gap-2">
                         <span className="text-green-600 dark:text-green-400 font-mono text-lg font-semibold">
-                          {contributionOutcomes.totalPRs.merged}
+                          {displayContributionOutcomes.totalPRs.merged}
                         </span>
                         <span className="text-xs text-gray-500 dark:text-gray-400">
                           total
@@ -448,7 +500,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
                       <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Closed</div>
                       <div className="flex items-center gap-2">
                         <span className="text-red-600 dark:text-red-400 font-mono text-lg font-semibold">
-                          {contributionOutcomes.totalPRs.closed}
+                          {displayContributionOutcomes.totalPRs.closed}
                         </span>
                         <span className="text-xs text-gray-500 dark:text-gray-400">
                           total
@@ -459,7 +511,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
                       <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Open</div>
                       <div className="flex items-center gap-2">
                         <span className="text-blue-600 dark:text-blue-400 font-mono text-lg font-semibold">
-                          {contributionOutcomes.totalPRs.open}
+                          {displayContributionOutcomes.totalPRs.open}
                         </span>
                         <span className="text-xs text-gray-500 dark:text-gray-400">
                           pending
@@ -469,6 +521,48 @@ export function ProjectCard({ project }: ProjectCardProps) {
                   </div>
                 </div>
               </div>
+            )}
+          </div>
+
+          {/* Summary Section */}
+          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+            {/* Section Header */}
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="size-5 text-orange-500" />
+              <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100">
+                Summary
+              </h3>
+              {summary && (
+                <Badge variant="secondary" className="text-xs">
+                  AI Generated
+                </Badge>
+              )}
+            </div>
+
+            {summaryLoading && (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full rounded" />
+                <Skeleton className="h-4 w-3/4 rounded" />
+                <Skeleton className="h-4 w-5/6 rounded" />
+              </div>
+            )}
+
+            {summary && !summaryLoading && (
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                  {summary}
+                </p>
+              </div>
+            )}
+
+            {!summary && !summaryLoading && !loading && (
+              <button
+                onClick={handleGenerateSummary}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+              >
+                <Sparkles className="size-4" />
+                Generate AI Summary
+              </button>
             )}
           </div>
           </div>
