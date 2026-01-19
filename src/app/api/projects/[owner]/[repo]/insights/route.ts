@@ -1,6 +1,12 @@
 import { Octokit } from "octokit";
 import { NextRequest, NextResponse } from "next/server";
 import { AlivenessMetrics, ContributionOutcomesMetrics } from "@/lib/mock-data";
+import { getFromCache, setInCache, getCacheKey } from "@/lib/cache";
+import { CACHE_TTL, CACHE_PREFIX } from "@/lib/redis";
+
+// -----------------------------------------------------------------------------
+// GitHub API Client
+// -----------------------------------------------------------------------------
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
@@ -8,16 +14,16 @@ const octokit = new Octokit({
   auth: GITHUB_TOKEN || undefined,
 });
 
+// -----------------------------------------------------------------------------
+// Route Types
+// -----------------------------------------------------------------------------
+
 interface RouteParams {
   params: Promise<{
     owner: string;
     repo: string;
   }>;
 }
-
-// In-memory cache with 5-minute TTL
-const cache = new Map<string, { data: InsightsResponse; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export interface InsightsResponse {
   aliveness: AlivenessMetrics;
@@ -177,12 +183,19 @@ interface GraphQLResponse {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { owner, repo } = await params;
-  const cacheKey = `${owner}/${repo}`;
 
-  // Check cache first
-  const cached = cache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return NextResponse.json(cached.data, {
+  // -----------------------------------------------------------------------------
+  // Redis Cache Check
+  // Build cache key using prefix for namespace organization (e.g., "insights:facebook/react")
+  // -----------------------------------------------------------------------------
+  const cacheKey = getCacheKey(CACHE_PREFIX.INSIGHTS, owner, repo);
+
+  // Attempt to retrieve cached data from Redis
+  // Returns null if not found or on connection error (graceful degradation)
+  const cached = await getFromCache<InsightsResponse>(cacheKey);
+  if (cached) {
+    // Cache hit - return cached data with appropriate headers
+    return NextResponse.json(cached, {
       headers: {
         "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
         "X-Cache": "HIT",
@@ -333,8 +346,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const result: InsightsResponse = { aliveness, contributionOutcomes };
 
-    // Store in cache
-    cache.set(cacheKey, { data: result, timestamp: Date.now() });
+    // -----------------------------------------------------------------------------
+    // Store Result in Redis Cache
+    // Cache for 5 minutes (300 seconds) to reduce GitHub API calls
+    // Errors are logged but don't affect the response (graceful degradation)
+    // -----------------------------------------------------------------------------
+    await setInCache(cacheKey, result, CACHE_TTL.INSIGHTS);
 
     return NextResponse.json(result, {
       headers: {

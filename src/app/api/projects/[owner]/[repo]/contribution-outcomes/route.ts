@@ -1,12 +1,22 @@
 import { Octokit } from "octokit";
 import { NextRequest, NextResponse } from "next/server";
 import { ContributionOutcomesMetrics } from "@/lib/mock-data";
+import { getFromCache, setInCache, getCacheKey } from "@/lib/cache";
+import { CACHE_TTL, CACHE_PREFIX } from "@/lib/redis";
+
+// -----------------------------------------------------------------------------
+// GitHub API Client
+// -----------------------------------------------------------------------------
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 const octokit = new Octokit({
   auth: GITHUB_TOKEN || undefined,
 });
+
+// -----------------------------------------------------------------------------
+// Route Types
+// -----------------------------------------------------------------------------
 
 interface RouteParams {
   params: Promise<{
@@ -147,6 +157,25 @@ interface GraphQLResponse {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { owner, repo } = await params;
 
+  // -----------------------------------------------------------------------------
+  // Redis Cache Check
+  // Build cache key using prefix for namespace organization (e.g., "contribution-outcomes:facebook/react")
+  // -----------------------------------------------------------------------------
+  const cacheKey = getCacheKey(CACHE_PREFIX.CONTRIBUTION_OUTCOMES, owner, repo);
+
+  // Attempt to retrieve cached metrics from Redis
+  // Returns null if not found or on connection error (graceful degradation)
+  const cached = await getFromCache<ContributionOutcomesMetrics>(cacheKey);
+  if (cached) {
+    // Cache hit - return cached data with appropriate headers
+    return NextResponse.json(cached, {
+      headers: {
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+        "X-Cache": "HIT",
+      },
+    });
+  }
+
   try {
     const response = await octokit.graphql<GraphQLResponse>(CONTRIBUTION_OUTCOMES_QUERY, {
       owner,
@@ -248,7 +277,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       },
     };
 
-    return NextResponse.json(metrics);
+    // -----------------------------------------------------------------------------
+    // Store Result in Redis Cache
+    // Cache for 5 minutes (300 seconds) to reduce GitHub API calls
+    // Errors are logged but don't affect the response (graceful degradation)
+    // -----------------------------------------------------------------------------
+    await setInCache(cacheKey, metrics, CACHE_TTL.CONTRIBUTION_OUTCOMES);
+
+    // Return fresh data with cache miss header
+    return NextResponse.json(metrics, {
+      headers: {
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+        "X-Cache": "MISS",
+      },
+    });
   } catch (error) {
     console.error("GitHub GraphQL API error:", error);
     return NextResponse.json(

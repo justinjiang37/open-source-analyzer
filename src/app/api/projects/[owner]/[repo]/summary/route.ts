@@ -1,6 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { AlivenessMetrics, ContributionOutcomesMetrics } from "@/lib/mock-data";
+import { getFromCache, setInCache, getCacheKey } from "@/lib/cache";
+import { CACHE_TTL, CACHE_PREFIX } from "@/lib/redis";
+
+// -----------------------------------------------------------------------------
+// Gemini AI Client
+// -----------------------------------------------------------------------------
 
 const client = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY!,
@@ -45,6 +51,10 @@ interface RouteParams {
   }>;
 }
 
+// -----------------------------------------------------------------------------
+// Request Types
+// -----------------------------------------------------------------------------
+
 interface SummaryRequest {
   aliveness: AlivenessMetrics;
   contributionOutcomes: ContributionOutcomesMetrics;
@@ -52,19 +62,22 @@ interface SummaryRequest {
   projectDescription?: string;
 }
 
-// In-memory cache with 5-minute TTL
-const summaryCache = new Map<string, { data: string; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const { owner, repo } = await params;
-  const cacheKey = `${owner}/${repo}`;
 
-  // Check cache first
-  const cached = summaryCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+  // -----------------------------------------------------------------------------
+  // Redis Cache Check
+  // Build cache key using prefix for namespace organization (e.g., "summary:facebook/react")
+  // -----------------------------------------------------------------------------
+  const cacheKey = getCacheKey(CACHE_PREFIX.SUMMARY, owner, repo);
+
+  // Attempt to retrieve cached summary from Redis
+  // Returns null if not found or on connection error (graceful degradation)
+  const cached = await getFromCache<string>(cacheKey);
+  if (cached) {
+    // Cache hit - return cached summary with appropriate headers
     return NextResponse.json(
-      { summary: cached.data },
+      { summary: cached },
       {
         headers: {
           "X-Cache": "HIT",
@@ -109,8 +122,12 @@ Provide a brief, actionable summary highlighting the project's strengths and any
 
     const summary = response.text || "Unable to generate summary.";
 
-    // Store in cache
-    summaryCache.set(cacheKey, { data: summary, timestamp: Date.now() });
+    // -----------------------------------------------------------------------------
+    // Store Result in Redis Cache
+    // Cache for 5 minutes (300 seconds) to reduce Gemini API calls and costs
+    // Errors are logged but don't affect the response (graceful degradation)
+    // -----------------------------------------------------------------------------
+    await setInCache(cacheKey, summary, CACHE_TTL.SUMMARY);
 
     return NextResponse.json(
       { summary },
