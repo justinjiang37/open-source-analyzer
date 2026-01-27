@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
       q: query,
       sort: sort as "stars" | "forks" | "updated",
       order: "desc",
-      per_page: 12,
+      per_page: 10,
       page: parseInt(page),
     });
 
