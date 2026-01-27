@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
+import { AuthButton } from "@/components/auth-button";
 
 export function Navbar() {
   const pathname = usePathname();
@@ -72,6 +73,9 @@ export function Navbar() {
               <Sun className="size-5" />
             )}
           </button>
+
+          {/* Auth Button */}
+          <AuthButton />
         </div>
       </div>
     </nav>
