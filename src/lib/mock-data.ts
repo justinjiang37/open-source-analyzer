@@ -10,6 +10,7 @@ export interface User {
   timeBudget: "Short-term (hours → days)" | "Medium (1–2 weeks)" | "Long-term (weeks+)";
   rejectionTolerance: "Low" | "Medium" | "High";
   preferredContributionTypes: string[]; // Can select multiple
+  onboardingStep?: number | null; // null = completed, 0 = skipped, 1-4 = in progress
 }
 
 export interface Project {

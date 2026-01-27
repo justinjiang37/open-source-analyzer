@@ -47,6 +47,7 @@ export async function GET(
     timeBudget: data.time_budget,
     rejectionTolerance: data.rejection_tolerance,
     preferredContributionTypes: data.preferred_contribution_types,
+    onboardingStep: data.onboarding_step,
   };
 
   return NextResponse.json({ user });
@@ -63,7 +64,7 @@ export async function PUT(
 
   // Transform camelCase from frontend to snake_case for DB
   // Use username from URL params, not body (prevents unauthorized username changes)
-  const dbData = {
+  const dbData: Record<string, unknown> = {
     name: body.name,
     bio: body.bio,
     avatar_url: body.avatarUrl,
@@ -76,6 +77,11 @@ export async function PUT(
     preferred_contribution_types: body.preferredContributionTypes,
     updated_at: new Date().toISOString(),
   };
+
+  // Handle onboarding_step (can be number or null)
+  if ("onboardingStep" in body) {
+    dbData.onboarding_step = body.onboardingStep;
+  }
 
   const { data, error } = await supabase
     .from("users")
@@ -101,6 +107,7 @@ export async function PUT(
     timeBudget: data.time_budget,
     rejectionTolerance: data.rejection_tolerance,
     preferredContributionTypes: data.preferred_contribution_types,
+    onboardingStep: data.onboarding_step,
   };
 
   return NextResponse.json({ success: true, user });

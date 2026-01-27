@@ -8,9 +8,11 @@
  */
 
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { ProfileForm } from "@/components/profile-form";
 import { createClient } from "@/lib/supabase/server";
 import { User } from "@/lib/mock-data";
+import { AlertCircle } from "lucide-react";
 
 async function getOrCreateProfile(
   authId: string,
@@ -48,6 +50,7 @@ async function getOrCreateProfile(
       timeBudget: existingUser.time_budget,
       rejectionTolerance: existingUser.rejection_tolerance,
       preferredContributionTypes: existingUser.preferred_contribution_types,
+      onboardingStep: existingUser.onboarding_step,
     };
   }
 
@@ -64,6 +67,7 @@ async function getOrCreateProfile(
     time_budget: "Medium (1–2 weeks)",
     rejection_tolerance: "Medium",
     preferred_contribution_types: [],
+    onboarding_step: 1, // Start at step 1 for new users
   };
 
   const { data: createdUser, error } = await supabase
@@ -87,6 +91,7 @@ async function getOrCreateProfile(
       timeBudget: "Medium (1–2 weeks)",
       rejectionTolerance: "Medium",
       preferredContributionTypes: [],
+      onboardingStep: null,
     };
   }
 
@@ -102,6 +107,7 @@ async function getOrCreateProfile(
     timeBudget: createdUser.time_budget,
     rejectionTolerance: createdUser.rejection_tolerance,
     preferredContributionTypes: createdUser.preferred_contribution_types,
+    onboardingStep: createdUser.onboarding_step,
   };
 }
 
@@ -132,9 +138,34 @@ export default async function ProfilePage() {
     avatarUrl: githubAvatar,
   });
 
+  // Check if user skipped onboarding or has incomplete profile
+  const showCompleteProfileBanner = user.onboardingStep === 0;
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="mx-auto max-w-4xl px-6 py-8">
+        {/* Complete Profile Banner */}
+        {showCompleteProfileBanner && (
+          <div className="mb-6 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-orange-800 dark:text-orange-200 font-medium">
+                Complete your profile
+              </p>
+              <p className="text-orange-700 dark:text-orange-300 text-sm mt-1">
+                You skipped onboarding.{" "}
+                <Link
+                  href="/onboarding/1"
+                  className="font-medium underline hover:no-underline"
+                >
+                  Complete your profile
+                </Link>{" "}
+                to get better project recommendations.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Page Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-blue-950 dark:text-blue-100 mb-2">
