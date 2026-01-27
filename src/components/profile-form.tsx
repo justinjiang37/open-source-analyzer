@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { User } from "@/lib/mock-data";
-import { Github, Mail, User as UserIcon, Code, Target, Clock, ThumbsDown, FileText } from "lucide-react";
+import { Github, Mail, User as UserIcon, Code, Target, Clock, ThumbsDown, FileText, Loader2 } from "lucide-react";
 
 interface ProfileFormProps {
   initialUser: User;
@@ -14,9 +14,41 @@ interface ProfileFormProps {
 export function ProfileForm({ initialUser }: ProfileFormProps) {
   const [user, setUser] = useState(initialUser);
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const handleSave = () => {
-    setIsEditing(false);
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      // Try to update existing user first
+      const response = await fetch(`/api/users/${user.githubUsername}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(user),
+      });
+
+      if (!response.ok) {
+        // If user doesn't exist, create them
+        const createResponse = await fetch("/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(user),
+        });
+
+        if (!createResponse.ok) {
+          const errorData = await createResponse.json();
+          throw new Error(errorData.error || "Failed to save profile");
+        }
+      }
+
+      setIsEditing(false);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Failed to save");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -388,11 +420,25 @@ export function ProfileForm({ initialUser }: ProfileFormProps) {
 
             {/* Action Buttons */}
             {isEditing && (
-              <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <Button onClick={handleSave}>Save Changes</Button>
-                <Button variant="ghost" onClick={() => setIsEditing(false)}>
-                  Cancel
-                </Button>
+              <div className="flex flex-col gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                {saveError && (
+                  <p className="text-red-600 dark:text-red-400 text-sm">{saveError}</p>
+                )}
+                <div className="flex gap-3">
+                  <Button onClick={handleSave} disabled={isSaving}>
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      "Save Changes"
+                    )}
+                  </Button>
+                  <Button variant="ghost" onClick={() => setIsEditing(false)} disabled={isSaving}>
+                    Cancel
+                  </Button>
+                </div>
               </div>
             )}
           </div>
