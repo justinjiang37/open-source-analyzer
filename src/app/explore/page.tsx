@@ -70,6 +70,36 @@ export default function ExplorePage() {
   const [totalCount, setTotalCount] = useState(0);
   const [prefetchedData, setPrefetchedData] = useState<Record<string, PrefetchedInsights>>({});
   const prefetchedRef = useRef<Set<string>>(new Set());
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+
+  // Fetch user's favorites on mount
+  useEffect(() => {
+    async function fetchFavorites() {
+      try {
+        const res = await fetch("/api/favorites");
+        if (res.ok) {
+          const data = await res.json();
+          const ids = new Set<string>(data.favorites.map((f: { projectId: string }) => f.projectId));
+          setFavoriteIds(ids);
+        }
+      } catch {
+        // User not logged in or error - ignore
+      }
+    }
+    fetchFavorites();
+  }, []);
+
+  const handleFavoriteToggle = (projectId: string, isFavorited: boolean) => {
+    setFavoriteIds((prev) => {
+      const next = new Set(prev);
+      if (isFavorited) {
+        next.add(projectId);
+      } else {
+        next.delete(projectId);
+      }
+      return next;
+    });
+  };
 
   const fetchProjects = useCallback(async (search: string, language: string, pageNum: number, append: boolean = false) => {
     if (append) {
@@ -285,6 +315,8 @@ export default function ExplorePage() {
                       key={project.id}
                       project={project}
                       prefetchedData={prefetchedData[`${project.owner}/${project.name}`]}
+                      isFavorited={favoriteIds.has(project.id)}
+                      onFavoriteToggle={handleFavoriteToggle}
                     />
                   ))}
             </div>

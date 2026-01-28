@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Star, GitCommit, ChevronDown, Clock, Activity, Users, Tag, GitPullRequest, CheckCircle2, MessageSquare, Timer, UserPlus, XCircle, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FavoriteButton } from "@/components/favorite-button";
 import { Project, AlivenessMetrics, ContributionOutcomesMetrics } from "@/lib/mock-data";
 import Image from "next/image";
 
@@ -15,6 +16,8 @@ interface PrefetchedInsights {
 interface ProjectCardProps {
   project: Project;
   prefetchedData?: PrefetchedInsights;
+  isFavorited?: boolean;
+  onFavoriteToggle?: (projectId: string, isFavorited: boolean) => void;
 }
 
 function formatStars(stars: number): string {
@@ -96,7 +99,7 @@ function formatHoursToReadable(hours: number): string {
   return `${days}d`;
 }
 
-export function ProjectCard({ project, prefetchedData }: ProjectCardProps) {
+export function ProjectCard({ project, prefetchedData, isFavorited = false, onFavoriteToggle }: ProjectCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [aliveness, setAliveness] = useState<AlivenessMetrics | null>(null);
   const [contributionOutcomes, setContributionOutcomes] = useState<ContributionOutcomesMetrics | null>(null);
@@ -183,7 +186,7 @@ export function ProjectCard({ project, prefetchedData }: ProjectCardProps) {
         onClick={handleToggle}
         className="p-6 cursor-pointer"
       >
-        {/* Header Row: Title + Language */}
+        {/* Header Row: Title + Language + Favorite */}
         <div className="flex items-center gap-3 mb-3">
           <h3 className="text-xl font-semibold text-blue-900 dark:text-blue-100 leading-tight">
             {project.name}
@@ -191,10 +194,23 @@ export function ProjectCard({ project, prefetchedData }: ProjectCardProps) {
           <Badge variant="secondary" className="text-xs shrink-0">
             {project.language}
           </Badge>
+          <div className="ml-auto">
+            <FavoriteButton
+              projectId={project.id}
+              projectName={project.name}
+              projectOwner={project.owner}
+              projectDescription={project.description}
+              projectLanguage={project.language}
+              projectStars={project.stars}
+              projectOwnerAvatarUrl={project.ownerAvatarUrl}
+              initialFavorited={isFavorited}
+              onToggle={(favorited) => onFavoriteToggle?.(project.id, favorited)}
+            />
+          </div>
         </div>
 
-        {/* Description Block - Multi-line */}
-        <p className="text-base text-gray-600 dark:text-gray-400 leading-relaxed mb-4">
+        {/* Description Block - Max 2 lines */}
+        <p className="text-base text-gray-600 dark:text-gray-400 leading-relaxed mb-4 line-clamp-2">
           {project.description}
         </p>
 

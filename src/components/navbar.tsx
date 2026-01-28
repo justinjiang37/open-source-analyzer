@@ -49,6 +49,17 @@ export function Navbar() {
               Explore
             </Link>
             <Link
+              href="/favorites"
+              className={cn(
+                "text-base font-medium px-3 py-2 rounded-md transition-all duration-200",
+                pathname === "/favorites"
+                  ? "text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-900/50"
+                  : "text-gray-700 hover:text-blue-600 hover:bg-blue-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-800"
+              )}
+            >
+              Favorites
+            </Link>
+            <Link
               href="/profile"
               className={cn(
                 "text-base font-medium px-3 py-2 rounded-md transition-all duration-200",
