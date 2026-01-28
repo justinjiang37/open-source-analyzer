@@ -72,6 +72,7 @@ export default function ExplorePage() {
   const prefetchedRef = useRef<Set<string>>(new Set());
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [userPreferences, setUserPreferences] = useState<UserPreferences | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
 
   // Fetch user's favorites and preferences on mount
   useEffect(() => {
@@ -85,11 +86,12 @@ export default function ExplorePage() {
           setFavoriteIds(ids);
         }
 
-        // Fetch user profile for preferences
+        // Fetch user profile for preferences and name
         const profileRes = await fetch("/api/users/me");
         if (profileRes.ok) {
           const userData = await profileRes.json();
           if (userData.user) {
+            setUserName(userData.user.name);
             setUserPreferences({
               primaryLanguages: userData.user.primaryLanguages,
               experienceLevel: userData.user.experienceLevel,
@@ -202,10 +204,12 @@ export default function ExplorePage() {
               {/* Welcome Message */}
               <div>
                 <h2 className="text-lg font-semibold text-blue-950 dark:text-blue-100 mb-3">
-                  Hi there!
+                  {userName ? `Welcome ${userName}!` : "Hello!"}
                 </h2>
                 <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                  I see you want to contribute to an open source project. Well the OSS Analyzer is here to serve that purpose. Start typing in keywords in the search bar or use the filter dropdown to quickly narrow down the best repos for your needs.
+                  Welcome to the OSS Analyzer. Start typing in keywords in the search bar or use
+                   the language filter dropdown to quickly narrow down the best repos for your needs. 
+                   Find the most relevant information about each project by clicking it and generate a summary.
                 </p>
               </div>
 

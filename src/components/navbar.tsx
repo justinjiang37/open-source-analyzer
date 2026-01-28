@@ -13,24 +13,12 @@ export function Navbar() {
 
   return (
     <nav className="border-b border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 shadow-sm">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+      <div className="flex h-16 items-center justify-between px-12">
         {/* Brand */}
         <Link
           href="/"
-          className="flex items-center gap-3 text-xl font-bold text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+          className="text-xl font-bold text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
         >
-          <svg
-            className="size-8"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <path d="M12 6v6l4 2" />
-          </svg>
           OSS Analyzer
         </Link>
 
