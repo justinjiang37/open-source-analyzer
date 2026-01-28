@@ -5,7 +5,7 @@ import { Star, GitCommit, ChevronDown, Clock, Activity, Users, Tag, GitPullReque
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FavoriteButton } from "@/components/favorite-button";
-import { Project, AlivenessMetrics, ContributionOutcomesMetrics } from "@/lib/mock-data";
+import { Project, AlivenessMetrics, ContributionOutcomesMetrics, UserPreferences } from "@/lib/mock-data";
 import Image from "next/image";
 
 interface PrefetchedInsights {
@@ -18,6 +18,7 @@ interface ProjectCardProps {
   prefetchedData?: PrefetchedInsights;
   isFavorited?: boolean;
   onFavoriteToggle?: (projectId: string, isFavorited: boolean) => void;
+  userPreferences?: UserPreferences | null;
 }
 
 function formatStars(stars: number): string {
@@ -99,7 +100,7 @@ function formatHoursToReadable(hours: number): string {
   return `${days}d`;
 }
 
-export function ProjectCard({ project, prefetchedData, isFavorited = false, onFavoriteToggle }: ProjectCardProps) {
+export function ProjectCard({ project, prefetchedData, isFavorited = false, onFavoriteToggle, userPreferences }: ProjectCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [aliveness, setAliveness] = useState<AlivenessMetrics | null>(null);
   const [contributionOutcomes, setContributionOutcomes] = useState<ContributionOutcomesMetrics | null>(null);
@@ -164,6 +165,8 @@ export function ProjectCard({ project, prefetchedData, isFavorited = false, onFa
           contributionOutcomes: currentContributionOutcomes,
           projectName: project.name,
           projectDescription: project.description,
+          projectLanguage: project.language,
+          userPreferences: userPreferences || undefined,
         }),
       });
       if (summaryRes.ok) {
@@ -549,9 +552,16 @@ export function ProjectCard({ project, prefetchedData, isFavorited = false, onFa
                 Summary
               </h3>
               {summary && (
-                <Badge variant="secondary" className="text-xs">
-                  AI Generated
-                </Badge>
+                <>
+                  <Badge variant="secondary" className="text-xs">
+                    AI Generated
+                  </Badge>
+                  {userPreferences && (
+                    <Badge variant="outline" className="text-xs border-orange-300 text-orange-600 dark:border-orange-600 dark:text-orange-400">
+                      Personalized
+                    </Badge>
+                  )}
+                </>
               )}
             </div>
 

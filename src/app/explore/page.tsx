@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ChevronDown } from "lucide-react";
-import { Project, AlivenessMetrics, ContributionOutcomesMetrics } from "@/lib/mock-data";
+import { Project, AlivenessMetrics, ContributionOutcomesMetrics, UserPreferences } from "@/lib/mock-data";
 
 const LANGUAGES = [
   "All",
@@ -71,22 +71,40 @@ export default function ExplorePage() {
   const [prefetchedData, setPrefetchedData] = useState<Record<string, PrefetchedInsights>>({});
   const prefetchedRef = useRef<Set<string>>(new Set());
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [userPreferences, setUserPreferences] = useState<UserPreferences | null>(null);
 
-  // Fetch user's favorites on mount
+  // Fetch user's favorites and preferences on mount
   useEffect(() => {
-    async function fetchFavorites() {
+    async function fetchUserData() {
       try {
-        const res = await fetch("/api/favorites");
-        if (res.ok) {
-          const data = await res.json();
+        // Fetch favorites
+        const favRes = await fetch("/api/favorites");
+        if (favRes.ok) {
+          const data = await favRes.json();
           const ids = new Set<string>(data.favorites.map((f: { projectId: string }) => f.projectId));
           setFavoriteIds(ids);
+        }
+
+        // Fetch user profile for preferences
+        const profileRes = await fetch("/api/users/me");
+        if (profileRes.ok) {
+          const userData = await profileRes.json();
+          if (userData.user) {
+            setUserPreferences({
+              primaryLanguages: userData.user.primaryLanguages,
+              experienceLevel: userData.user.experienceLevel,
+              contributionGoals: userData.user.contributionGoals,
+              preferredContributionTypes: userData.user.preferredContributionTypes,
+              timeBudget: userData.user.timeBudget,
+              rejectionTolerance: userData.user.rejectionTolerance,
+            });
+          }
         }
       } catch {
         // User not logged in or error - ignore
       }
     }
-    fetchFavorites();
+    fetchUserData();
   }, []);
 
   const handleFavoriteToggle = (projectId: string, isFavorited: boolean) => {
@@ -317,6 +335,7 @@ export default function ExplorePage() {
                       prefetchedData={prefetchedData[`${project.owner}/${project.name}`]}
                       isFavorited={favoriteIds.has(project.id)}
                       onFavoriteToggle={handleFavoriteToggle}
+                      userPreferences={userPreferences}
                     />
                   ))}
             </div>

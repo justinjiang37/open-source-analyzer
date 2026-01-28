@@ -13,6 +13,16 @@ export interface User {
   onboardingStep?: number | null; // null = completed, 0 = skipped, 1-4 = in progress
 }
 
+// Subset of User for personalized AI summaries
+export interface UserPreferences {
+  primaryLanguages?: string[];
+  experienceLevel?: string;
+  contributionGoals?: string[];
+  preferredContributionTypes?: string[];
+  timeBudget?: string;
+  rejectionTolerance?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
