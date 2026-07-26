@@ -173,7 +173,7 @@ Provide a brief, actionable summary highlighting the project's strengths and any
     // Call Gemini (with retry for rate limits/transient errors).
     const response = await withRetry(async () => {
       return await client.models.generateContent({
-        model: "models/gemini-2.5-flash",
+        model: "models/gemini-3.6-flash",
         contents: prompt,
       });
     });
