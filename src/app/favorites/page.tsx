@@ -18,11 +18,19 @@ interface Favorite {
   createdAt: string;
 }
 
+/**
+ * Favorites page.
+ *
+ * Loads the logged-in user's saved projects from `/api/favorites`
+ * and renders them using the shared `ProjectCard` component.
+ */
 export default function FavoritesPage() {
+  // Page state: raw favorites (DB shape), loading/error UI state
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch favorites from the backend (requires auth cookies)
   const fetchFavorites = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -44,10 +52,12 @@ export default function FavoritesPage() {
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
     fetchFavorites();
   }, [fetchFavorites]);
 
+  // If a card is unfavorited, remove it from the local list immediately.
   const handleFavoriteToggle = (projectId: string, isFavorited: boolean) => {
     if (!isFavorited) {
       // Remove from the local list when unfavorited
@@ -55,7 +65,7 @@ export default function FavoritesPage() {
     }
   };
 
-  // Convert favorites to Project format for ProjectCard
+  // Adapt favorites DB shape to the `Project` shape expected by `ProjectCard`.
   const favoriteProjects: Project[] = favorites.map((fav) => ({
     id: fav.projectId,
     name: fav.projectName,

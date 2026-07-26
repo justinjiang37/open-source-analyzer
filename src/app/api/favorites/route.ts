@@ -10,9 +10,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 // GET /api/favorites - Get all favorites for the authenticated user
 export async function GET() {
+  // Server-side Supabase client (uses auth cookies to identify the user)
   const supabase = await createClient();
 
-  // Check authentication
+  // Auth guard: only logged-in users can read favorites
   const {
     data: { user: authUser },
   } = await supabase.auth.getUser();
@@ -21,7 +22,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Get all favorites for this user (RLS filters by auth_id automatically)
+  // Fetch favorites from DB (RLS should limit rows to this user)
   const { data: favorites, error } = await supabase
     .from("favorites")
     .select("*")
@@ -31,7 +32,7 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Transform to camelCase for frontend
+  // Convert DB snake_case fields to camelCase for the frontend
   const transformedFavorites = (favorites || []).map((fav) => ({
     id: fav.id,
     projectId: fav.project_id,
@@ -49,9 +50,10 @@ export async function GET() {
 
 // POST /api/favorites - Add a project to favorites
 export async function POST(request: NextRequest) {
+  // Server-side Supabase client (uses auth cookies to identify the user)
   const supabase = await createClient();
 
-  // Check authentication
+  // Auth guard: only logged-in users can add favorites
   const {
     data: { user: authUser },
   } = await supabase.auth.getUser();
@@ -60,9 +62,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Read request body (project info from the UI)
   const body = await request.json();
 
-  // Validate required fields
+  // Basic validation (minimum info needed to save a favorite)
   if (!body.projectId || !body.projectName || !body.projectOwner) {
     return NextResponse.json(
       { error: "projectId, projectName, and projectOwner are required" },
@@ -70,7 +73,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Insert the favorite with auth_id for RLS
+  // Insert into DB and associate it to this user via auth_id
   const { data, error } = await supabase
     .from("favorites")
     .insert({
@@ -88,12 +91,13 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     console.error("Favorites insert error:", error);
-    // Handle duplicate entry
+    // Duplicate favorite (unique constraint violation)
     if (error.code === "23505") {
       return NextResponse.json({ error: "Project already in favorites" }, { status: 409 });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Success: return the inserted row
   return NextResponse.json({ success: true, favorite: data }, { status: 201 });
 }

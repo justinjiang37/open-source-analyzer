@@ -13,6 +13,7 @@ interface StepSkillsProps {
   currentStep: number;
 }
 
+// Onboarding step 2: collect primary languages + experience level.
 export function StepSkills({ profile, currentStep }: StepSkillsProps) {
   const router = useRouter();
   // Store raw input value to allow typing commas
@@ -25,7 +26,7 @@ export function StepSkills({ profile, currentStep }: StepSkillsProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Parse languages from input for display and saving
+  // Parse comma-separated languages input (max 3).
   const getParsedLanguages = () => {
     return languageInput
       .split(",")
@@ -34,6 +35,7 @@ export function StepSkills({ profile, currentStep }: StepSkillsProps) {
       .slice(0, 3);
   };
 
+  // Save step data to the user's profile, then navigate to the next step.
   const handleNext = async () => {
     setIsLoading(true);
     setError(null);
@@ -62,6 +64,7 @@ export function StepSkills({ profile, currentStep }: StepSkillsProps) {
     }
   };
 
+  // Skip onboarding (set onboardingStep to 0) and go to profile page.
   const handleSkip = async () => {
     setIsLoading(true);
 

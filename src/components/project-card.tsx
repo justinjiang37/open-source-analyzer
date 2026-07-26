@@ -8,6 +8,15 @@ import { FavoriteButton } from "@/components/favorite-button";
 import { Project, AlivenessMetrics, ContributionOutcomesMetrics, UserPreferences } from "@/lib/mock-data";
 import Image from "next/image";
 
+/**
+ * ProjectCard
+ *
+ * A single “repo row” on the Explore/Favorites pages.
+ * - Collapsed: basic repo info (name, stars, owner, last commit)
+ * - Expanded: cached metrics (insights) + optional AI summary
+ * - Includes a star button to favorite/unfavorite the repo
+ */
+
 interface PrefetchedInsights {
   aliveness: AlivenessMetrics;
   contributionOutcomes: ContributionOutcomesMetrics;
@@ -21,6 +30,7 @@ interface ProjectCardProps {
   userPreferences?: UserPreferences | null;
 }
 
+// Small formatting helpers for display.
 function formatStars(stars: number): string {
   if (stars >= 1000) {
     return `${(stars / 1000).toFixed(1)}k`;
@@ -101,6 +111,7 @@ function formatHoursToReadable(hours: number): string {
 }
 
 export function ProjectCard({ project, prefetchedData, isFavorited = false, onFavoriteToggle, userPreferences }: ProjectCardProps) {
+  // UI state for expansion + fetched metrics/summary.
   const [expanded, setExpanded] = useState(false);
   const [aliveness, setAliveness] = useState<AlivenessMetrics | null>(null);
   const [contributionOutcomes, setContributionOutcomes] = useState<ContributionOutcomesMetrics | null>(null);
@@ -109,11 +120,12 @@ export function ProjectCard({ project, prefetchedData, isFavorited = false, onFa
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Use prefetched data if available
+  // Use prefetched insights when available (Explore page preloads these).
   const displayAliveness = aliveness || prefetchedData?.aliveness || null;
   const displayContributionOutcomes = contributionOutcomes || prefetchedData?.contributionOutcomes || null;
   const hasPrefetchedData = !!prefetchedData;
 
+  // Expand/collapse the card. If metrics aren't prefetched, fetch them on first expand.
   const handleToggle = async (e: React.MouseEvent) => {
     e.preventDefault();
 
@@ -145,6 +157,7 @@ export function ProjectCard({ project, prefetchedData, isFavorited = false, onFa
     setExpanded(!expanded);
   };
 
+  // Generate an AI summary (requires metrics, can be personalized using userPreferences).
   const handleGenerateSummary = async (e: React.MouseEvent) => {
     e.stopPropagation();
 

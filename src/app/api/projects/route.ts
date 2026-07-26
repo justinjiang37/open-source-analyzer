@@ -3,16 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFromCache, setInCache, getCacheKey } from "@/lib/cache";
 import { CACHE_TTL, CACHE_PREFIX } from "@/lib/redis";
 
-// -----------------------------------------------------------------------------
-// GitHub API Client
-// -----------------------------------------------------------------------------
 
+// GitHub API client (used to search public repos)
 const octokit = new Octokit();
 
-// -----------------------------------------------------------------------------
-// Response Types
-// -----------------------------------------------------------------------------
 
+// Response shape returned to the frontend (and stored in cache)
 interface SearchResponse {
   projects: Array<{
     id: string;
@@ -30,44 +26,33 @@ interface SearchResponse {
   total: number;
 }
 
-// -----------------------------------------------------------------------------
-// Cache Key Generation for Search
-// Creates a deterministic cache key from search parameters using base64 encoding
-// This ensures consistent keys for the same search parameters
-// -----------------------------------------------------------------------------
-
+// Build a stable cache key for a given search query
 function getSearchCacheKey(
   search: string,
   language: string,
   sort: string,
   page: string
 ): string {
-  // Combine all search params into a single string, then base64 encode for URL-safe key
+  // Combine params into one string, then base64 so it's safe for a Redis key
   const params = `${search}|${language}|${sort}|${page}`;
   const encoded = Buffer.from(params).toString("base64");
   return getCacheKey(CACHE_PREFIX.SEARCH, encoded);
 }
 
 export async function GET(request: NextRequest) {
-  // -----------------------------------------------------------------------------
-  // Extract Search Parameters
-  // -----------------------------------------------------------------------------
+  // Read query params from the request URL
   const searchParams = request.nextUrl.searchParams;
   const search = searchParams.get("search") || "";
   const language = searchParams.get("language") || "";
   const sort = searchParams.get("sort") || "stars";
   const page = searchParams.get("page") || "1";
 
-  // -----------------------------------------------------------------------------
-  // Redis Cache Check
-  // Search results have a shorter TTL (60s) since they're more dynamic
-  // -----------------------------------------------------------------------------
+  // Cache lookup (fast path)
   const cacheKey = getSearchCacheKey(search, language, sort, page);
 
-  // Attempt to retrieve cached search results from Redis
   const cached = await getFromCache<SearchResponse>(cacheKey);
   if (cached) {
-    // Cache hit - return cached results with appropriate headers
+    // Cache hit: return cached data immediately
     return NextResponse.json(cached, {
       headers: {
         "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120",
@@ -76,8 +61,9 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  // no cache hit -> use search query instead and find via github api
   try {
-    // Build query: use search term if provided, otherwise show popular repos
+    // Build a GitHub search query string
     let query = search ? `${search} in:name,description` : "stars:>10000";
     if (language) {
       query += ` language:${language}`;
@@ -86,7 +72,7 @@ export async function GET(request: NextRequest) {
       query += " stars:>1000";
     }
 
-    // call github api
+    // Call GitHub Search API (paged)
     const response = await octokit.rest.search.repos({
       q: query,
       sort: sort as "stars" | "forks" | "updated",
@@ -95,10 +81,7 @@ export async function GET(request: NextRequest) {
       page: parseInt(page),
     });
 
-    // -----------------------------------------------------------------------------
-    // Transform GitHub Response
-    // Extract only the necessary fields for the frontend to reduce payload size
-    // -----------------------------------------------------------------------------
+    // Convert GitHub response into the smaller shape our UI expects
     const projects = response.data.items.map((repo) => ({
       id: repo.id.toString(),
       name: repo.name,
@@ -115,14 +98,10 @@ export async function GET(request: NextRequest) {
 
     const result: SearchResponse = { projects, total: response.data.total_count };
 
-    // -----------------------------------------------------------------------------
-    // Store Result in Redis Cache
-    // Cache for 1 minute (60 seconds) - shorter TTL for search results
-    // since repository rankings change more frequently
-    // -----------------------------------------------------------------------------
+    // Cache the result briefly (search data changes frequently)
     await setInCache(cacheKey, result, CACHE_TTL.SEARCH);
 
-    // Return fresh data with cache miss header
+    // Cache miss: return fresh data
     return NextResponse.json(result, {
       headers: {
         "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120",

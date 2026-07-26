@@ -25,11 +25,11 @@ export function StepComplete({ profile, currentStep }: StepCompleteProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
+  // Mark onboarding complete and redirect to explore page
   const handleFinish = async () => {
     setIsLoading(true);
 
     try {
-      // Mark onboarding as complete (set to null)
       await fetch(`/api/users/${profile.githubUsername}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -57,7 +57,7 @@ export function StepComplete({ profile, currentStep }: StepCompleteProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Success header with checkmark icon */}
       <div className="text-center space-y-4">
         <div className="flex justify-center">
           <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
@@ -72,9 +72,9 @@ export function StepComplete({ profile, currentStep }: StepCompleteProps) {
         </p>
       </div>
 
-      {/* Profile Summary */}
+      {/* Profile summary display */}
       <div className="space-y-6">
-        {/* User info */}
+        {/* User avatar and basic info */}
         <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
           <Avatar className="size-16 ring-4 ring-orange-100 dark:ring-orange-900">
             <AvatarImage src={profile.avatarUrl} alt={profile.name} />
@@ -97,7 +97,7 @@ export function StepComplete({ profile, currentStep }: StepCompleteProps) {
           </div>
         </div>
 
-        {/* Summary grid */}
+        {/* Grid showing all profile preferences (languages, experience, goals, etc.) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Languages */}
           <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg">

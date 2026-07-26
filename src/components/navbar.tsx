@@ -7,9 +7,10 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
 import { AuthButton } from "@/components/auth-button";
 
+// Top navigation bar shown on every page (links + theme toggle + auth button).
 export function Navbar() {
   const pathname = usePathname();
-  const { theme, toggleTheme } = useTheme();
+  const { toggleTheme } = useTheme();
 
   return (
     <nav className="border-b border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 shadow-sm">
@@ -25,6 +26,7 @@ export function Navbar() {
         {/* Navigation Links + Theme Toggle */}
         <div className="flex items-center gap-2">
           <nav className="flex items-center gap-6 mr-4">
+            {/* Nav links highlight based on current pathname */}
             <Link
               href="/explore"
               className={cn(
@@ -64,13 +66,11 @@ export function Navbar() {
           <button
             onClick={toggleTheme}
             className="p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
-            aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+            aria-label="Toggle theme"
           >
-            {theme === "light" ? (
-              <Moon className="size-5" />
-            ) : (
-              <Sun className="size-5" />
-            )}
+            {/* Both icons rendered; CSS picks one so server and client markup match */}
+            <Moon className="size-5 dark:hidden" />
+            <Sun className="size-5 hidden dark:block" />
           </button>
 
           {/* Auth Button */}

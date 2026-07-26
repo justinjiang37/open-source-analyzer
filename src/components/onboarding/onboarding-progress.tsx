@@ -9,11 +9,12 @@ interface OnboardingProgressProps {
 }
 
 export function OnboardingProgress({ currentStep }: OnboardingProgressProps) {
+  // Calculate progress percentage for the progress bar
   const progressPercentage = (currentStep / ONBOARDING_STEPS.length) * 100;
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      {/* Progress bar */}
+      {/* Animated progress bar showing completion percentage */}
       <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mb-6">
         <div
           className="h-full bg-orange-500 transition-all duration-500 ease-out"
@@ -21,7 +22,7 @@ export function OnboardingProgress({ currentStep }: OnboardingProgressProps) {
         />
       </div>
 
-      {/* Step indicators */}
+      {/* Step indicators - shows checkmarks for completed steps, numbers for current/future */}
       <div className="flex justify-between">
         {ONBOARDING_STEPS.map((step) => (
           <div

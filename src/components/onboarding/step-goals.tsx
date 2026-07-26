@@ -12,6 +12,7 @@ interface StepGoalsProps {
   currentStep: number;
 }
 
+// Onboarding step 3: select contribution goals and preferred contribution types.
 export function StepGoals({ profile, currentStep }: StepGoalsProps) {
   const router = useRouter();
   const [contributionGoals, setContributionGoals] = useState<string[]>(
@@ -23,18 +24,21 @@ export function StepGoals({ profile, currentStep }: StepGoalsProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Toggle goal checkbox selection.
   const toggleGoal = (goal: string) => {
     setContributionGoals((prev) =>
       prev.includes(goal) ? prev.filter((g) => g !== goal) : [...prev, goal]
     );
   };
 
+  // Toggle contribution type checkbox selection.
   const toggleType = (type: string) => {
     setPreferredContributionTypes((prev) =>
       prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
     );
   };
 
+  // Save step data to the user's profile, then navigate to the next step.
   const handleNext = async () => {
     setIsLoading(true);
     setError(null);
@@ -63,6 +67,7 @@ export function StepGoals({ profile, currentStep }: StepGoalsProps) {
     }
   };
 
+  // Skip onboarding (set onboardingStep to 0) and go to profile page.
   const handleSkip = async () => {
     setIsLoading(true);
 

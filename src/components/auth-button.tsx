@@ -19,13 +19,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 
 export function AuthButton() {
+  // Local auth state for the navbar (logged-in user vs logged-out).
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   const supabase = createClient();
 
   useEffect(() => {
-    // Get initial session
+    // On mount: read the current session from Supabase.
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
@@ -34,7 +35,7 @@ export function AuthButton() {
 
     getUser();
 
-    // Listen for auth changes (login/logout)
+    // Keep state in sync when the user logs in/out.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setUser(session?.user ?? null);

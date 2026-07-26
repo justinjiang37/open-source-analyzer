@@ -17,9 +17,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ username: string }> }
 ) {
+  // Read GitHub username from URL (e.g., /api/users/janedev)
   const { username } = await params;
   const supabase = await createClient();
 
+  // Look up user by GitHub username
   const { data, error } = await supabase
     .from("users")
     .select("*")
@@ -27,14 +29,14 @@ export async function GET(
     .single();
 
   if (error) {
-    // PGRST116 = no rows found (not an error, just no user yet)
+    // No user found (not an error, just return null)
     if (error.code === "PGRST116") {
       return NextResponse.json({ user: null }, { status: 200 });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Transform snake_case from DB to camelCase for frontend
+  // Convert DB snake_case to camelCase for frontend
   const user = {
     id: data.id,
     name: data.name,
@@ -58,12 +60,13 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ username: string }> }
 ) {
+  // Read GitHub username from URL (prevents unauthorized username changes)
   const { username } = await params;
   const supabase = await createClient();
   const body = await request.json();
 
-  // Transform camelCase from frontend to snake_case for DB
-  // Use username from URL params, not body (prevents unauthorized username changes)
+  // Convert frontend camelCase to DB snake_case
+  // Use username from URL, not body (security: can't change your own username)
   const dbData: Record<string, unknown> = {
     name: body.name,
     bio: body.bio,
@@ -78,11 +81,12 @@ export async function PUT(
     updated_at: new Date().toISOString(),
   };
 
-  // Handle onboarding_step (can be number or null)
+  // Optionally update onboarding_step if provided
   if ("onboardingStep" in body) {
     dbData.onboarding_step = body.onboardingStep;
   }
 
+  // Update the user's profile in DB
   const { data, error } = await supabase
     .from("users")
     .update(dbData)
@@ -94,7 +98,7 @@ export async function PUT(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Transform snake_case from DB to camelCase for frontend (consistent with GET)
+  // Convert DB snake_case back to camelCase for frontend
   const user = {
     id: data.id,
     name: data.name,

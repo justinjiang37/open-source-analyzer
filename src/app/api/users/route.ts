@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const body = await request.json();
 
-  // Validate required fields
+  // Require GitHub username (used as unique identifier)
   if (!body.githubUsername) {
     return NextResponse.json(
       { error: "githubUsername is required" },
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Transform camelCase from frontend to snake_case for DB
+  // Convert frontend camelCase to DB snake_case format
   const dbData = {
     name: body.name || body.githubUsername,
     bio: body.bio || "",
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     preferred_contribution_types: body.preferredContributionTypes || [],
   };
 
-  // Upsert: insert if new, update if exists (based on github_username)
+  // Upsert: create if new, update if exists (conflict on github_username)
   const { data, error } = await supabase
     .from("users")
     .upsert(dbData, { onConflict: "github_username" })
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Transform back to camelCase for frontend
+  // Convert DB snake_case back to camelCase for frontend
   const user = {
     id: data.id,
     name: data.name,

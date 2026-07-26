@@ -22,8 +22,9 @@ import { createClient } from "@supabase/supabase-js";
 export function createAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!, // Secret key - bypasses all security
     {
+      // Admin client doesn't need auth features (no user sessions)
       auth: {
         autoRefreshToken: false,
         persistSession: false,

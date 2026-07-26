@@ -1,3 +1,13 @@
+/**
+ * Shared TypeScript types used across the app.
+ *
+ * These interfaces define the shape of:
+ * - user profiles (onboarding + profile page)
+ * - projects returned from GitHub search
+ * - metrics shown in project insights cards and AI summaries
+ *
+ * This file also contains small mock objects used for demos/dev.
+ */
 export interface User {
   id: string;
   name: string;
@@ -70,6 +80,7 @@ export interface ContributionOutcomesMetrics {
   };
 }
 
+// Example user profile data (used for testing/demo)
 export const mockUser: User = {
   id: "1",
   name: "Jane Developer",
@@ -84,6 +95,7 @@ export const mockUser: User = {
   preferredContributionTypes: ["Bug fixes", "Features", "Documentation"],
 };
 
+// Example project list data (used for testing/demo)
 export const mockProjects: Project[] = [
   {
     id: "1",

@@ -4,20 +4,14 @@ import { ContributionOutcomesMetrics } from "@/lib/mock-data";
 import { getFromCache, setInCache, getCacheKey } from "@/lib/cache";
 import { CACHE_TTL, CACHE_PREFIX } from "@/lib/redis";
 
-// -----------------------------------------------------------------------------
-// GitHub API Client
-// -----------------------------------------------------------------------------
-
+// GitHub API client (GraphQL) for PR/contribution metrics
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 const octokit = new Octokit({
   auth: GITHUB_TOKEN || undefined,
 });
 
-// -----------------------------------------------------------------------------
-// Route Types
-// -----------------------------------------------------------------------------
-
+// Dynamic route params: /api/projects/:owner/:repo/contribution-outcomes
 interface RouteParams {
   params: Promise<{
     owner: string;
@@ -25,6 +19,7 @@ interface RouteParams {
   }>;
 }
 
+// GraphQL query for PR outcomes (merged/closed/open + first responses)
 const CONTRIBUTION_OUTCOMES_QUERY = `
   query($owner: String!, $repo: String!) {
     repository(owner: $owner, name: $repo) {
@@ -157,17 +152,12 @@ interface GraphQLResponse {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { owner, repo } = await params;
 
-  // -----------------------------------------------------------------------------
-  // Redis Cache Check
-  // Build cache key using prefix for namespace organization (e.g., "contribution-outcomes:facebook/react")
-  // -----------------------------------------------------------------------------
+  // Try cache first (fast path): contribution-outcomes:<owner>/<repo>
   const cacheKey = getCacheKey(CACHE_PREFIX.CONTRIBUTION_OUTCOMES, owner, repo);
 
-  // Attempt to retrieve cached metrics from Redis
-  // Returns null if not found or on connection error (graceful degradation)
   const cached = await getFromCache<ContributionOutcomesMetrics>(cacheKey);
   if (cached) {
-    // Cache hit - return cached data with appropriate headers
+    // Cache hit
     return NextResponse.json(cached, {
       headers: {
         "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
@@ -177,6 +167,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
+    // Fetch raw PR data from GitHub GraphQL
     const response = await octokit.graphql<GraphQLResponse>(CONTRIBUTION_OUTCOMES_QUERY, {
       owner,
       repo,
@@ -184,25 +175,25 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const repoData = response.repository;
 
-    // The repo owner is considered a maintainer
+    // Treat the repo owner as the “maintainer” for external contributor calculations
     const ownerLogin = repoData.owner.login.toLowerCase();
 
     const mergedPRs = repoData.mergedPRs.nodes;
     const closedPRs = repoData.closedPRs.nodes.filter((pr) => !pr.mergedAt); // Filter out merged ones
     const allClosedPRs = [...mergedPRs, ...closedPRs];
 
-    // Calculate PR Acceptance Rate
+    // PR acceptance: percent of closed PRs that got merged
     const totalClosed = allClosedPRs.length;
     const mergedCount = mergedPRs.length;
     const prAcceptanceRate = totalClosed > 0 ? Math.round((mergedCount / totalClosed) * 100) : 0;
 
-    // Calculate Closed Without Merge Rate
+    // Rejection rate: percent of closed PRs that were closed without merge
     const closedWithoutMerge = closedPRs.length;
     const closedWithoutMergeRate = totalClosed > 0
       ? Math.round((closedWithoutMerge / totalClosed) * 100)
       : 0;
 
-    // Calculate Time to First Response (for all closed PRs)
+    // Time to first response: first review/comment from someone other than the PR author
     const responseTimesHours: number[] = [];
     allClosedPRs.forEach((pr) => {
       const prAuthor = pr.author?.login?.toLowerCase() || "";
@@ -234,7 +225,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       ? Math.round(responseTimesHours.reduce((a, b) => a + b, 0) / responseTimesHours.length)
       : null;
 
-    // Calculate Time to Merge (for merged PRs only)
+    // Time to merge: average time from open -> merge (merged PRs only)
     const mergeTimesHours: number[] = [];
     mergedPRs.forEach((pr) => {
       if (pr.mergedAt) {
@@ -251,7 +242,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       ? Math.round(mergeTimesHours.reduce((a, b) => a + b, 0) / mergeTimesHours.length)
       : null;
 
-    // Calculate External Contributor Share (PRs not from owner)
+    // External contributor share: percent of closed PRs opened by non-owner
     let externalPRs = 0;
     allClosedPRs.forEach((pr) => {
       const prAuthor = pr.author?.login?.toLowerCase() || "";
@@ -264,6 +255,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       ? Math.round((externalPRs / totalClosed) * 100)
       : 0;
 
+    // Final contribution outcomes metrics returned to the UI
     const metrics: ContributionOutcomesMetrics = {
       prAcceptanceRate,
       timeToFirstResponse,
@@ -277,14 +269,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       },
     };
 
-    // -----------------------------------------------------------------------------
-    // Store Result in Redis Cache
-    // Cache for 5 minutes (300 seconds) to reduce GitHub API calls
-    // Errors are logged but don't affect the response (graceful degradation)
-    // -----------------------------------------------------------------------------
+    // Cache result to reduce GitHub API calls
     await setInCache(cacheKey, metrics, CACHE_TTL.CONTRIBUTION_OUTCOMES);
 
-    // Return fresh data with cache miss header
+    // Cache miss
     return NextResponse.json(metrics, {
       headers: {
         "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",

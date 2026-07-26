@@ -11,21 +11,23 @@ import { NextResponse } from "next/server";
 export async function GET() {
   const supabase = await createClient();
 
-  // Get the current authenticated user
+  // Check who is logged in (from auth cookies)
   const { data: { user: authUser } } = await supabase.auth.getUser();
 
   if (!authUser) {
+    // Not logged in: return null (not an error)
     return NextResponse.json({ user: null }, { status: 200 });
   }
 
-  // Get GitHub username from auth metadata
+  // Extract GitHub username from OAuth metadata
   const githubUsername = authUser.user_metadata?.user_name || authUser.user_metadata?.preferred_username;
 
   if (!githubUsername) {
+    // No GitHub username in auth: return null
     return NextResponse.json({ user: null }, { status: 200 });
   }
 
-  // Fetch the user's profile
+  // Look up the user's profile in our DB by GitHub username
   const { data, error } = await supabase
     .from("users")
     .select("*")
@@ -33,14 +35,14 @@ export async function GET() {
     .single();
 
   if (error) {
-    // PGRST116 = no rows found (user hasn't completed onboarding)
+    // No profile found (user hasn't completed onboarding yet)
     if (error.code === "PGRST116") {
       return NextResponse.json({ user: null }, { status: 200 });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Transform snake_case from DB to camelCase for frontend
+  // Convert DB snake_case to camelCase for frontend
   const user = {
     id: data.id,
     name: data.name,

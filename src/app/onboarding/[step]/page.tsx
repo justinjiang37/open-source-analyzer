@@ -12,6 +12,7 @@ interface OnboardingStepPageProps {
   params: Promise<{ step: string }>;
 }
 
+// Load the current user's profile from the DB (by auth user id)
 async function getUserProfile(authId: string): Promise<User | null> {
   const supabase = await createClient();
 
@@ -39,20 +40,31 @@ async function getUserProfile(authId: string): Promise<User | null> {
   };
 }
 
+/**
+ * Dynamic onboarding step page: `/onboarding/[step]` (e.g. /onboarding/1).
+ *
+ * Runs on the server to:
+ * - validate the step number
+ * - enforce authentication
+ * - load the user's profile
+ * - render the correct step UI component
+ */
 export default async function OnboardingStepPage({
   params,
 }: OnboardingStepPageProps) {
+  // Read the dynamic route param (e.g. "3" from /onboarding/3)
   const { step } = await params;
   const stepNumber = parseInt(step, 10);
 
-  // Validate step number (1-5)
+  // Guard: invalid step -> go back to step 1
   if (isNaN(stepNumber) || stepNumber < 1 || stepNumber > 5) {
     redirect("/onboarding/1");
   }
 
+  // Server-side Supabase client (reads auth cookies from the request)
   const supabase = await createClient();
 
-  // Check if user is authenticated
+  // Auth guard: if not logged in, send to home
   const {
     data: { user: authUser },
   } = await supabase.auth.getUser();
@@ -61,15 +73,15 @@ export default async function OnboardingStepPage({
     redirect("/");
   }
 
-  // Get user profile
+  // Load the user's saved onboarding/profile data
   const profile = await getUserProfile(authUser.id);
 
   if (!profile) {
-    // Profile doesn't exist yet - should not happen if auth callback creates it
+    // Safety fallback: if profile doesn't exist, send them to profile page
     redirect("/profile");
   }
 
-  // Render the appropriate step
+  // Render the progress UI + the correct step component
   return (
     <div className="space-y-8">
       <OnboardingProgress currentStep={stepNumber} />

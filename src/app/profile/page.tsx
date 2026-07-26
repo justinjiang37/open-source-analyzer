@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/server";
 import { User } from "@/lib/mock-data";
 import { AlertCircle } from "lucide-react";
 
+// Load the user's profile row if it exists; otherwise create a default one.
 async function getOrCreateProfile(
   authId: string,
   githubUsername: string,
@@ -21,7 +22,7 @@ async function getOrCreateProfile(
 ): Promise<User> {
   const supabase = await createClient();
 
-  // Try to fetch existing profile (by auth_id or github_username)
+  // Look for an existing profile (supports legacy rows missing auth_id).
   const { data: existingUser } = await supabase
     .from("users")
     .select("*")
@@ -29,7 +30,7 @@ async function getOrCreateProfile(
     .single();
 
   if (existingUser) {
-    // If existing user doesn't have auth_id, update it (migration case)
+    // Migration helper: backfill auth_id on older rows.
     if (!existingUser.auth_id) {
       await supabase
         .from("users")
@@ -37,7 +38,7 @@ async function getOrCreateProfile(
         .eq("id", existingUser.id);
     }
 
-    // Return existing profile (transformed to camelCase)
+    // Convert DB snake_case to app camelCase shape.
     return {
       id: existingUser.id,
       name: existingUser.name,
@@ -54,7 +55,7 @@ async function getOrCreateProfile(
     };
   }
 
-  // No profile exists - create one with defaults from GitHub
+  // No profile exists yet: create a default one from GitHub OAuth metadata.
   const newProfile = {
     auth_id: authId, // Link to Supabase Auth user
     name: githubData.name || githubUsername,
@@ -70,6 +71,7 @@ async function getOrCreateProfile(
     onboarding_step: 1, // Start at step 1 for new users
   };
 
+  // Insert and return the created row.
   const { data: createdUser, error } = await supabase
     .from("users")
     .insert(newProfile)
@@ -77,8 +79,7 @@ async function getOrCreateProfile(
     .single();
 
   if (error || !createdUser) {
-    // If insert fails (e.g., RLS), return a default object
-    // The user can still edit, and it will be saved on next attempt
+    // If insert fails, still return a usable default object for the UI.
     return {
       id: "",
       name: githubData.name || githubUsername,
@@ -95,6 +96,7 @@ async function getOrCreateProfile(
     };
   }
 
+  // Convert DB snake_case to app camelCase shape.
   return {
     id: createdUser.id,
     name: createdUser.name,
@@ -112,9 +114,9 @@ async function getOrCreateProfile(
 }
 
 export default async function ProfilePage() {
+  // Server-side auth check (redirect away if not logged in).
   const supabase = await createClient();
 
-  // Check if user is authenticated
   const { data: { user: authUser } } = await supabase.auth.getUser();
 
   if (!authUser) {
@@ -122,7 +124,7 @@ export default async function ProfilePage() {
     redirect("/");
   }
 
-  // Get GitHub data from auth metadata
+  // Pull GitHub identity info from the auth session (OAuth metadata).
   const githubUsername = authUser.user_metadata?.user_name || authUser.user_metadata?.preferred_username;
   const githubName = authUser.user_metadata?.full_name || authUser.user_metadata?.name;
   const githubAvatar = authUser.user_metadata?.avatar_url;
@@ -132,13 +134,13 @@ export default async function ProfilePage() {
     redirect("/");
   }
 
-  // Get or create the user's profile
+  // Ensure the user has a profile row in our DB.
   const user = await getOrCreateProfile(authUser.id, githubUsername, {
     name: githubName,
     avatarUrl: githubAvatar,
   });
 
-  // Check if user skipped onboarding or has incomplete profile
+  // Show a banner if the user skipped onboarding (onboardingStep === 0).
   const showCompleteProfileBanner = user.onboardingStep === 0;
 
   return (

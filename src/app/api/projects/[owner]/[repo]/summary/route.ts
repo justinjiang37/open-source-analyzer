@@ -4,10 +4,14 @@ import { AlivenessMetrics, ContributionOutcomesMetrics } from "@/lib/mock-data";
 import { getFromCache, setInCache, getCacheKey } from "@/lib/cache";
 import { CACHE_TTL, CACHE_PREFIX } from "@/lib/redis";
 
-// -----------------------------------------------------------------------------
-// Gemini AI Client
-// -----------------------------------------------------------------------------
+/**
+ * POST /api/projects/:owner/:repo/summary
+ *
+ * Generates a short AI summary of a repo using the already-computed metrics.
+ * Uses Redis caching for non-personalized summaries to reduce Gemini calls/cost.
+ */
 
+// Gemini client (server-side only)
 const client = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY!,
 });
@@ -51,10 +55,7 @@ interface RouteParams {
   }>;
 }
 
-// -----------------------------------------------------------------------------
-// Request Types
-// -----------------------------------------------------------------------------
-
+// Request body shape sent from the UI (metrics + optional user preferences)
 interface UserPreferences {
   primaryLanguages?: string[];
   experienceLevel?: string;
@@ -76,22 +77,17 @@ interface SummaryRequest {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const { owner, repo } = await params;
 
-  // Clone request to read body for cache decision
+  // Read request body and decide whether this is personalized.
   const body: SummaryRequest = await request.json();
   const hasUserPreferences = body.userPreferences && Object.keys(body.userPreferences).length > 0;
 
-  // -----------------------------------------------------------------------------
-  // Redis Cache Check (only for non-personalized requests)
-  // Personalized summaries are not cached as they vary per user
-  // -----------------------------------------------------------------------------
+  // Cache lookup: only cache non-personalized summaries (same for everyone).
   const cacheKey = getCacheKey(CACHE_PREFIX.SUMMARY, owner, repo);
 
   if (!hasUserPreferences) {
-    // Attempt to retrieve cached summary from Redis
-    // Returns null if not found or on connection error (graceful degradation)
     const cached = await getFromCache<string>(cacheKey);
     if (cached) {
-      // Cache hit - return cached summary with appropriate headers
+      // Cache hit
       return NextResponse.json(
         { summary: cached },
         {
@@ -104,9 +100,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
+    // Pull inputs needed to build the prompt.
     const { aliveness, contributionOutcomes, projectName, projectDescription, projectLanguage, userPreferences } = body;
 
-    // Build user context section if preferences are provided
+    // Optional: include user preferences to make the summary personalized.
     let userContextSection = "";
     if (userPreferences && Object.keys(userPreferences).length > 0) {
       const parts: string[] = [];
@@ -136,7 +133,7 @@ ${parts.join("\n")}`;
       }
     }
 
-    // Build personalized instruction if user context is available
+    // If personalized, ask the model to add a short “Fit Assessment”.
     const personalizedInstruction = userContextSection
       ? `
 
@@ -148,6 +145,7 @@ After the project summary, add a "Fit Assessment" section (1-2 sentences) evalua
 - Rejection risk (given PR acceptance rates and their tolerance)`
       : "";
 
+    // Prompt includes the computed metrics so Gemini can summarize project “health”.
     const prompt = `You are an expert open source software analyst. Analyze the following repository metrics and provide a concise, insightful summary (2-3 sentences) about the health and activity of this project.
 
 Repository: ${owner}/${projectName}
@@ -172,6 +170,7 @@ Contribution Outcomes:
 
 Provide a brief, actionable summary highlighting the project's strengths and any potential concerns. Focus on what matters most to potential contributors.${personalizedInstruction}`;
 
+    // Call Gemini (with retry for rate limits/transient errors).
     const response = await withRetry(async () => {
       return await client.models.generateContent({
         model: "models/gemini-2.5-flash",
@@ -181,11 +180,7 @@ Provide a brief, actionable summary highlighting the project's strengths and any
 
     const summary = response.text || "Unable to generate summary.";
 
-    // -----------------------------------------------------------------------------
-    // Store Result in Redis Cache (only for non-personalized summaries)
-    // Cache for 5 minutes (300 seconds) to reduce Gemini API calls and costs
-    // Personalized summaries are not cached as they vary per user
-    // -----------------------------------------------------------------------------
+    // Cache non-personalized summaries so repeated clicks are instant.
     if (!hasUserPreferences) {
       await setInCache(cacheKey, summary, CACHE_TTL.SUMMARY);
     }

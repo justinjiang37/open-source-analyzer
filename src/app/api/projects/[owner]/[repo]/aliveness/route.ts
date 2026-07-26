@@ -4,20 +4,14 @@ import { AlivenessMetrics } from "@/lib/mock-data";
 import { getFromCache, setInCache, getCacheKey } from "@/lib/cache";
 import { CACHE_TTL, CACHE_PREFIX } from "@/lib/redis";
 
-// -----------------------------------------------------------------------------
-// GitHub API Client
-// -----------------------------------------------------------------------------
-
+// GitHub API client (GraphQL) for repo health metrics
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 const octokit = new Octokit({
   auth: GITHUB_TOKEN || undefined,
 });
 
-// -----------------------------------------------------------------------------
-// Route Types
-// -----------------------------------------------------------------------------
-
+// Dynamic route params: /api/projects/:owner/:repo/aliveness
 interface RouteParams {
   params: Promise<{
     owner: string;
@@ -25,6 +19,7 @@ interface RouteParams {
   }>;
 }
 
+// GraphQL query that fetches commit/release/issue data needed for “aliveness”
 const ALIVENESS_QUERY = `
   query($owner: String!, $repo: String!, $since90d: GitTimestamp!, $since30d: GitTimestamp!, $since7d: GitTimestamp!, $issuesSince30d: DateTime!, $issuesSince90d: DateTime!) {
     repository(owner: $owner, name: $repo) {
@@ -120,20 +115,16 @@ interface GraphQLResponse {
   };
 }
 
+// Fetch aliveness metrics for a given repo
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { owner, repo } = await params;
 
-  // -----------------------------------------------------------------------------
-  // Redis Cache Check
-  // Build cache key using prefix for namespace organization (e.g., "aliveness:facebook/react")
-  // -----------------------------------------------------------------------------
+  // Try cache first (fast path): aliveness:<owner>/<repo>
   const cacheKey = getCacheKey(CACHE_PREFIX.ALIVENESS, owner, repo);
 
-  // Attempt to retrieve cached metrics from Redis
-  // Returns null if not found or on connection error (graceful degradation)
   const cached = await getFromCache<AlivenessMetrics>(cacheKey);
   if (cached) {
-    // Cache hit - return cached data with appropriate headers
+    // Cache hit
     return NextResponse.json(cached, {
       headers: {
         "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
@@ -143,11 +134,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
+    // Compute time windows used by the GraphQL query (7d / 30d / 90d)
     const now = new Date();
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
+    // Fetch raw repo activity data from GitHub GraphQL
     const response = await octokit.graphql<GraphQLResponse>(ALIVENESS_QUERY, {
       owner,
       repo,
@@ -160,19 +153,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const repoData = response.repository;
 
-    // Calculate days since last commit
+    // Commit recency: days since last push
     const pushedAt = new Date(repoData.pushedAt);
     const daysSinceLastCommit = Math.floor(
       (now.getTime() - pushedAt.getTime()) / (1000 * 60 * 60 * 24)
     );
 
-    // Commit velocity
+    // Commit velocity: commits in the last week/month/quarter
     const commitHistory = repoData.defaultBranchRef?.target;
     const weekCommits = commitHistory?.last7?.totalCount ?? 0;
     const monthCommits = commitHistory?.last30?.totalCount ?? 0;
     const quarterCommits = commitHistory?.history?.totalCount ?? 0;
 
-    // Bus factor calculation
+    // Bus factor: how concentrated commits are among top contributors
     const commits = commitHistory?.history?.nodes ?? [];
     const authorCounts: Record<string, number> = {};
     commits.forEach((commit) => {
@@ -188,7 +181,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const top3Commits = sortedAuthors.slice(0, 3).reduce((sum, [, count]) => sum + count, 0);
     const top3Percent = Math.round((top3Commits / totalCommits) * 100);
 
-    // Release cadence
+    // Release cadence: average days between recent releases (if any)
     let releaseCadence: number | null = null;
     const releases = repoData.releases.nodes;
     if (releases.length >= 2) {
@@ -203,6 +196,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       releaseCadence = Math.round(totalDays / (releaseDates.length - 1));
     }
 
+    // Final “aliveness” metrics returned to the UI
     const metrics: AlivenessMetrics = {
       daysSinceLastCommit,
       commitVelocity: {
@@ -223,14 +217,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       },
     };
 
-    // -----------------------------------------------------------------------------
-    // Store Result in Redis Cache
-    // Cache for 5 minutes (300 seconds) to reduce GitHub API calls
-    // Errors are logged but don't affect the response (graceful degradation)
-    // -----------------------------------------------------------------------------
+    // Cache result to reduce GitHub API calls
     await setInCache(cacheKey, metrics, CACHE_TTL.ALIVENESS);
 
-    // Return fresh data with cache miss header
+    // Cache miss
     return NextResponse.json(metrics, {
       headers: {
         "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",

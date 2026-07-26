@@ -14,6 +14,7 @@ interface StepWelcomeProps {
   currentStep: number;
 }
 
+// Onboarding step 1: collect display name + bio.
 export function StepWelcome({ profile, currentStep }: StepWelcomeProps) {
   const router = useRouter();
   const [name, setName] = useState(profile.name);
@@ -21,6 +22,7 @@ export function StepWelcome({ profile, currentStep }: StepWelcomeProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Save step data to the user's profile, then navigate to the next step.
   const handleNext = async () => {
     setIsLoading(true);
     setError(null);
@@ -49,6 +51,7 @@ export function StepWelcome({ profile, currentStep }: StepWelcomeProps) {
     }
   };
 
+  // Skip onboarding (set onboardingStep to 0) and go to profile page.
   const handleSkip = async () => {
     setIsLoading(true);
 

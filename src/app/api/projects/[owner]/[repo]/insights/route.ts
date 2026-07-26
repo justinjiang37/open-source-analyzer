@@ -4,20 +4,14 @@ import { AlivenessMetrics, ContributionOutcomesMetrics } from "@/lib/mock-data";
 import { getFromCache, setInCache, getCacheKey } from "@/lib/cache";
 import { CACHE_TTL, CACHE_PREFIX } from "@/lib/redis";
 
-// -----------------------------------------------------------------------------
-// GitHub API Client
-// -----------------------------------------------------------------------------
-
+// GitHub API client (GraphQL) for combined insights
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 const octokit = new Octokit({
   auth: GITHUB_TOKEN || undefined,
 });
 
-// -----------------------------------------------------------------------------
-// Route Types
-// -----------------------------------------------------------------------------
-
+// Dynamic route params: /api/projects/:owner/:repo/insights
 interface RouteParams {
   params: Promise<{
     owner: string;
@@ -184,17 +178,12 @@ interface GraphQLResponse {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { owner, repo } = await params;
 
-  // -----------------------------------------------------------------------------
-  // Redis Cache Check
-  // Build cache key using prefix for namespace organization (e.g., "insights:facebook/react")
-  // -----------------------------------------------------------------------------
+  // Try cache first (fast path): insights:<owner>/<repo>
   const cacheKey = getCacheKey(CACHE_PREFIX.INSIGHTS, owner, repo);
 
-  // Attempt to retrieve cached data from Redis
-  // Returns null if not found or on connection error (graceful degradation)
   const cached = await getFromCache<InsightsResponse>(cacheKey);
   if (cached) {
-    // Cache hit - return cached data with appropriate headers
+    // Cache hit
     return NextResponse.json(cached, {
       headers: {
         "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
@@ -204,11 +193,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
+    // Compute time windows used by the query (7d / 30d / 90d)
     const now = new Date();
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
+    // Fetch all repo activity + PR data in one GraphQL request
     const response = await octokit.graphql<GraphQLResponse>(INSIGHTS_QUERY, {
       owner,
       repo,
@@ -346,11 +337,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const result: InsightsResponse = { aliveness, contributionOutcomes };
 
-    // -----------------------------------------------------------------------------
-    // Store Result in Redis Cache
-    // Cache for 5 minutes (300 seconds) to reduce GitHub API calls
-    // Errors are logged but don't affect the response (graceful degradation)
-    // -----------------------------------------------------------------------------
+    // Cache result to reduce GitHub API calls
     await setInCache(cacheKey, result, CACHE_TTL.INSIGHTS);
 
     return NextResponse.json(result, {

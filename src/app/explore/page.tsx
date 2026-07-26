@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { Search } from "lucide-react";
 import { ProjectCard } from "@/components/project-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,12 +32,13 @@ const LANGUAGES = [
   "Kotlin",
 ];
 
+// Shape of the cached/prefetched insights stored per repo card.
 export interface PrefetchedInsights {
   aliveness: AlivenessMetrics;
   contributionOutcomes: ContributionOutcomesMetrics;
 }
 
-// Prefetch insights only (summary is user-triggered)
+// Background fetch of metrics so expanding a card feels instant.
 async function prefetchInsights(
   project: Project,
   onComplete: (key: string, data: PrefetchedInsights) => void
@@ -59,7 +59,18 @@ async function prefetchInsights(
   }
 }
 
+/**
+ * Explore page (main discovery UI).
+ *
+ * Responsibilities:
+ * - Search + filter GitHub repos via `/api/projects`
+ * - Track pagination ("Load More")
+ * - Load user context (favorites + onboarding preferences)
+ * - Prefetch per-repo insights via `/api/projects/:owner/:repo/insights`
+ * - Render the list of `ProjectCard`s
+ */
 export default function ExplorePage() {
+  // Page data + UI state
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -68,13 +79,17 @@ export default function ExplorePage() {
   const [selectedLanguage, setSelectedLanguage] = useState("All");
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+
+  // Per-repo prefetched insights cache (keyed by "owner/repo")
   const [prefetchedData, setPrefetchedData] = useState<Record<string, PrefetchedInsights>>({});
   const prefetchedRef = useRef<Set<string>>(new Set());
+
+  // User context used for UI (favorites star state + personalized summaries)
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [userPreferences, setUserPreferences] = useState<UserPreferences | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
 
-  // Fetch user's favorites and preferences on mount
+  // On first load, pull the user's favorites + profile preferences (if logged in).
   useEffect(() => {
     async function fetchUserData() {
       try {
@@ -109,6 +124,7 @@ export default function ExplorePage() {
     fetchUserData();
   }, []);
 
+  // Keep the local favorites set in sync when a card toggles its star.
   const handleFavoriteToggle = (projectId: string, isFavorited: boolean) => {
     setFavoriteIds((prev) => {
       const next = new Set(prev);
@@ -121,6 +137,7 @@ export default function ExplorePage() {
     });
   };
 
+  // Fetch a page of projects from the backend search endpoint.
   const fetchProjects = useCallback(async (search: string, language: string, pageNum: number, append: boolean = false) => {
     if (append) {
       setLoadingMore(true);
@@ -151,8 +168,7 @@ export default function ExplorePage() {
     }
   }, []);
 
-  // Debounced search (also handles initial fetch)
-  // Reset to page 1 when search or language changes
+  // Debounced search: when query/filter changes, reset to page 1 and refetch.
   useEffect(() => {
     setPage(1);
     const timer = setTimeout(() => {
@@ -161,6 +177,7 @@ export default function ExplorePage() {
     return () => clearTimeout(timer);
   }, [searchQuery, selectedLanguage, fetchProjects]);
 
+  // Fetch the next page and append results.
   const handleLoadMore = () => {
     const nextPage = page + 1;
     setPage(nextPage);
@@ -169,12 +186,12 @@ export default function ExplorePage() {
 
   const hasMore = projects.length < totalCount;
 
-  // Callback to store prefetched data
+  // Store prefetched insights by "owner/repo" key.
   const handlePrefetchComplete = useCallback((key: string, data: PrefetchedInsights) => {
     setPrefetchedData((prev) => ({ ...prev, [key]: data }));
   }, []);
 
-  // Prefetch insights + summary for visible projects after they load
+  // After projects load, prefetch insights for each repo (staggered to avoid spikes).
   useEffect(() => {
     if (loading || projects.length === 0) return;
 

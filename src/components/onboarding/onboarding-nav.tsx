@@ -26,6 +26,7 @@ export function OnboardingNav({
 
   return (
     <div className="flex items-center justify-between pt-6 border-t border-gray-200 dark:border-gray-700 mt-8">
+      {/* Back button - only show after step 1 */}
       <div>
         {currentStep > 1 && (
           <Button variant="ghost" onClick={onBack} disabled={isLoading}>
@@ -34,6 +35,7 @@ export function OnboardingNav({
         )}
       </div>
 
+      {/* Skip and Continue buttons */}
       <div className="flex gap-3">
         {!isLastStep && (
           <Button variant="ghost" onClick={onSkip} disabled={isLoading}>

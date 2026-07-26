@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Star button that adds/removes a project from the user's favorites list.
 interface FavoriteButtonProps {
   projectId: string;
   projectName: string;
@@ -27,9 +28,11 @@ export function FavoriteButton({
   initialFavorited = false,
   onToggle,
 }: FavoriteButtonProps) {
+  // Local UI state for optimistic updates.
   const [isFavorited, setIsFavorited] = useState(initialFavorited);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Toggle favorite via the Favorites API (optimistic UI, revert on error).
   const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -92,6 +95,7 @@ export function FavoriteButton({
     }
   };
 
+  // Render a star icon that fills when favorited.
   return (
     <button
       onClick={handleClick}

@@ -11,12 +11,15 @@ interface ProfileFormProps {
   initialUser: User;
 }
 
+// Editable profile form used on the Profile page (updates the `users` table via API).
 export function ProfileForm({ initialUser }: ProfileFormProps) {
+  // Local form state (starts with server-loaded user profile).
   const [user, setUser] = useState(initialUser);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Save changes: update user if exists, otherwise create (fallback).
   const handleSave = async () => {
     setIsSaving(true);
     setSaveError(null);

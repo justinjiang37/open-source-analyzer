@@ -12,6 +12,7 @@ interface StepPreferencesProps {
   currentStep: number;
 }
 
+// Onboarding step 4: select time budget and PR feedback tolerance.
 export function StepPreferences({ profile, currentStep }: StepPreferencesProps) {
   const router = useRouter();
   const [timeBudget, setTimeBudget] = useState(profile.timeBudget);
@@ -21,6 +22,7 @@ export function StepPreferences({ profile, currentStep }: StepPreferencesProps) 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Save step data to the user's profile, then navigate to the next step.
   const handleNext = async () => {
     setIsLoading(true);
     setError(null);
@@ -49,6 +51,7 @@ export function StepPreferences({ profile, currentStep }: StepPreferencesProps) 
     }
   };
 
+  // Skip onboarding (set onboardingStep to 0) and go to profile page.
   const handleSkip = async () => {
     setIsLoading(true);
 
@@ -72,6 +75,7 @@ export function StepPreferences({ profile, currentStep }: StepPreferencesProps) 
     router.push(`/onboarding/${currentStep - 1}`);
   };
 
+  // Small helper text shown under each radio option.
   const getTimeBudgetDescription = (budget: string) => {
     switch (budget) {
       case "Short-term (hours → days)":
@@ -85,6 +89,7 @@ export function StepPreferences({ profile, currentStep }: StepPreferencesProps) 
     }
   };
 
+  // Small helper text shown under each radio option.
   const getRejectionToleranceDescription = (tolerance: string) => {
     switch (tolerance) {
       case "Low":
